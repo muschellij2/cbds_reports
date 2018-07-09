@@ -1,0 +1,11 @@
+.Rhistory
+.RData
+.Rproj.user
+datacamp/*
+all_courses/*
+cbds-report-*.html
+cbds-report-*.Rmd
+cbds-report-*.md
+cbds-report-*.pdf
+student_df.rds
+.Rapp.history

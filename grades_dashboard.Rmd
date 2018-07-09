@@ -1,0 +1,196 @@
+---
+title: "Chromebook Data Science Plus: Student Grades"
+author: ""
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    social: 
+    source_code: embed
+runtime: shiny
+---
+
+```{r global, include=FALSE}
+# imports the csv file for each course
+packages <- c("dplyr", "readr", "janitor", "DT", "purrr", 
+              "flexdashboard", "shiny")
+instapack <- function(pkg){
+  new.pkg <- pkg[!(pkg %in% installed.packages()[, "Package"])]
+  if (length(new.pkg))
+    install.packages(new.pkg, dependencies = TRUE)
+  sapply(pkg, require, character.only = TRUE)
+}
+suppressMessages(suppressWarnings(instapack(packages)))
+```
+
+```{r, include = FALSE}
+# create the map like this
+course_df = data_frame(
+  course_title = c("Introduction to Chromebook Data Science", 
+                   "Google and the Cloud",
+                   "Oraganizing Data Science Projects",
+                   "Version Control"),
+  course_name = c("chromebook-data-science",
+                  "googleandthecloud",
+                  "organizingdatascienceprojects",
+                  "version-control"))
+```
+
+```{r, include = FALSE}
+student_df = data_frame(
+  name = c("Antonio",  "Tiana"),
+  user = c("qYJ_bWY0MaBGogHBrCDA7A", "1_pTsoiB7xbTG-g73Dbwmg")
+)
+course_name_from_csv = function(x) {
+  sub(".*jhu- *(.*?) *-quiz.*", "\\1", basename(x))
+}
+df_to_choices = function(x, names_x) {
+  names(x) = names_x
+  return(x)
+}
+importcsv <- function(fname){
+  x = read_csv(fname)
+  stop_for_problems(x)
+  x = x %>%  
+    clean_names() %>% 
+    # update to give credit for long text answers
+    mutate(points_available_updated = ifelse(
+      answer_type == "long_text", 1 , points_available),
+      points_given_updated = ifelse(
+        answer_type == "long_text" & !is.na(given_answer), 1, points_given),
+      point_share = points_given_updated/points_available_updated) 
+  x$csvname = fname
+  x = x %>%
+    mutate(course_name = course_name_from_csv(csvname))
+  return(x)
+}
+```
+
+
+```{r data, include = FALSE}
+csvname <- list.files("all_courses", 
+                      full.names = TRUE, 
+                      recursive = TRUE, include.dirs = FALSE, 
+                      pattern = ".csv")
+
+csv_df = data_frame(
+  csvname = csvname,
+  course_name = course_name_from_csv(csvname)
+)
+
+csv_df = csv_df %>% 
+  left_join(course_df)
+
+df = purrr::map_dfr(csv_df$csvname, importcsv)
+df = df %>% 
+  mutate(course_name = course_name_from_csv(csvname))
+```
+
+Inputs {.sidebar}
+-----------------------------------------------------------------------
+
+```{r}
+course_df = course_df %>% 
+  right_join(csv_df %>% 
+               select(course_name, course_title) %>% 
+               distinct)
+ selectInput("stuname", label = h4("Student Name"), 
+    choices = df_to_choices(student_df$user, student_df$name), 
+    selected = 1)
+ selectInput("coursename", label = h4("Course Name"), 
+    choices = df_to_choices(course_df$course_name, course_df$course_title), 
+    selected = 1)
+```
+
+Data should be all imported as 
+`.csv` and be included in the 
+folder `all_courses`.
+
+Time taken is calculated in days
+and is the time difference
+between the completion of the
+first and the last course item
+in a course.
+
+
+Row
+-----------------------------------------------------------------------
+
+### Grade (Points)
+
+```{r}
+stu <- reactive(as.character(input$stuname))
+crs <- reactive(as.numeric(input$coursename))
+get_df = reactive({
+  d <- df %>% 
+    group_by(course_name) %>% 
+    filter(user == stu()) 
+    return(d)
+})
+summ_points = reactive({
+   d = get_df() 
+   d = d %>%
+    summarise(points = sum(points_given_updated),
+              available =  sum(points_available_updated),
+              ratio = paste0(points, "/", available),
+              grade = round(points/available, 2))
+})
+
+flexdashboard::renderValueBox({
+  d = summ_points()
+  flexdashboard::valueBox(d$ratio, icon = "")
+})
+```
+
+### Grade (%) 
+
+```{r}
+flexdashboard::renderValueBox({
+  d = summ_points()
+  flexdashboard::valueBox(d$grade, icon = "")
+})
+```
+
+
+
+### Time Taken (Days)
+
+```{r}
+flexdashboard::renderValueBox({
+d <- get_df() %>% 
+    summarise(maxtime = max(quiz_finish_time),
+              mintime = min(quiz_finish_time)) %>% 
+    mutate(dff = as.numeric(difftime(maxtime, mintime, units="days"))) %>% 
+    select(dff) %>% 
+    as.vector()
+flexdashboard::valueBox(round(d,1), icon = "")
+})
+```
+
+
+### Course Attempt(s)
+
+```{r}
+flexdashboard::renderValueBox({
+e <- get_df() %>% 
+    summarise(mx = max(course_attempt)) %>% 
+    select(mx) %>% 
+    as.vector()
+flexdashboard::valueBox(e, icon = "")
+})
+```
+
+Row
+-----------------------------------------------------------------------
+<!-- use DT::renderDataTable instead of renderTable for interactive table -->
+### Course Detail
+    
+```{r}
+
+renderTable(
+  get_df() %>% 
+      select("quiz_id", "course_attempt",
+             "quiz_attempt",
+             "question_number", "answer_type",
+             "point_share", "quiz_finish_time") 
+)
+```

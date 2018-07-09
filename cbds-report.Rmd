@@ -1,0 +1,283 @@
+---
+output:
+  html_document:
+    df_print: paged
+    keep_md: true
+    toc: true
+    theme: united
+    toc_float: true
+    css: overlap_workaround.css
+  pdf_document: default
+params:
+  name: Antonio
+---
+
+---
+title: `r paste0("CBDS+ Report for ", params$name)`
+---
+
+```{r, include = FALSE}
+library(dplyr)
+library(readr)
+library(janitor)
+library(here)
+library(shiny)
+library(kableExtra)
+getOutputFormat <- function() {
+  output <- rmarkdown:::parse_yaml_front_matter(
+    readLines(knitr::current_input())
+    )$output
+  if (is.list(output)){
+    return(names(output)[1])
+  } else {
+    return(output[1])
+  }
+}
+# type_of_output = knitr::opts_knit$get("rmarkdown.pandoc.to")
+
+student_df = readr::read_rds("student_df.rds")
+knitr::opts_chunk$set(echo = FALSE, comment = "",
+                      message = FALSE, warning = FALSE)
+library(knitr)
+
+course_name_from_csv = function(x) {
+  sub(".*jhu- *(.*?) *-quiz.*", "\\1", basename(x))
+}
+df_to_choices = function(x, names_x) {
+  names(x) = names_x
+  return(x)
+}
+
+cat_br = function(n = 1){
+  x = sapply(1:n, function(x) as.character(tags$br()))
+  x = paste(x, collapse = "\n")
+  cat(x)
+}
+
+importcsv <- function(fname){
+  x = read_csv(fname)
+  stop_for_problems(x)
+  if (nrow(x) == 0) {
+    return(NULL)
+  }  
+  x = x %>%  
+    clean_names() %>% 
+    # update to give credit for long text answers
+    mutate(points_available_updated = ifelse(
+      answer_type == "long_text", 1 , points_available),
+      points_given_updated = ifelse(
+        answer_type == "long_text" & !is.na(given_answer), 1, points_given),
+      point_share = points_given_updated/points_available_updated) 
+  x$csvname = fname
+  x = x %>%
+    mutate(course_name = course_name_from_csv(csvname))
+  return(x)
+}
+```
+
+```{r, include=FALSE}
+type_of_output = getOutputFormat()
+```
+
+```{r, include = FALSE}
+# create the map like this
+course_df = data_frame(
+  course_title = c("Introduction to Chromebook Data Science", 
+                   "How to Use a Chromebook",
+                   "Google and the Cloud",
+                   "Oraganizing Data Science Projects",
+                   "Version Control",
+                   "Introduction to R",
+                   "Data Tidying",
+                   "Data Visualization",
+                   "Getting Data",
+                   "Basics of Data Analysis",
+                   "Written and Oral Communication in DS",
+                   "Getting a Job in Data Science"
+                   ),
+  course_name = c("chromebook-data-science",
+                  "howtouseachromebook",
+                  "googleandthecloud",
+                  "organizingdatascienceprojects",
+                  "version-control",
+                  "introduction-to-r",
+                  "data-tidying",
+                  "data-visualization",
+                  "getting-data",
+                  "basics-of-data-analysis",
+                  "written-and-oral-communication-in-ds",
+                  "getting-a-job-in-data-science"
+                  ))
+course_df = course_df %>% 
+  distinct 
+# %>% 
+  # mutate(course_name = factor(course_name, levels = course_name),
+  #       course_title = factor(course_title, levels = course_title))
+  
+```
+
+```{r,echo=FALSE,warning=FALSE,error=FALSE,message=FALSE}
+course_files <- list.files("all_courses", 
+                           full.names = TRUE, 
+                           recursive = TRUE, include.dirs = FALSE, 
+                           pattern = ".csv")
+
+df = purrr::map_dfr(course_files, importcsv)
+df$order = 1:nrow(df)
+df = df %>% 
+  mutate(course_name = course_name_from_csv(csvname))
+df = df %>% 
+  left_join(course_df) %>% 
+  mutate(course_name = factor(course_name, levels = course_df$course_name),
+         course_title = factor(course_title, levels = course_df$course_title))  
+courses = df %>% 
+  group_by(course_name) %>% 
+  summarize(max_attempt = max(course_attempt, na.rm = TRUE),
+            max_attempt_allowed = max(course_attempts_allowed)) 
+
+df = df %>%
+  left_join(student_df)
+df = df %>% 
+  filter(name %in% params$name)
+# params$user_id = unique(df$user)
+```
+
+# Report Overview
+
+This is a Chromebook Data Science Plus report for __`r params$name`__ to help guide tutorial sessions. This report is designed as an aide, but is not an official report on the grades of any person. The official tally for grades is available through a user's Leanpub account.
+
+# Leanpub Courses
+
+```{r}
+courses = courses %>% 
+  mutate(max_attempt_allowed_word = max_attempt_allowed,
+         max_attempt_allowed_word = recode(max_attempt_allowed_word,
+                                           "1" = "one",
+                                           "2" = "two",
+                                           "3" = "three",
+                                           "4" = "four", 
+                                           "5" = "five", 
+                                           "6" = "six", 
+                                           "7" = "seven",
+                                           "8" = "eight", 
+                                           "9" = "nine")
+  )
+courses$txt = paste0("This class requires a 70% to pass and a 90% for honors. ", 
+             "You get ", courses$max_attempt_allowed_word, 
+             " attempts on the course. ")
+df = df %>% 
+  left_join(courses)
+df = df %>% 
+  arrange(course_name, order)
+df$order = NULL
+all_courses = unique(df$course_title)
+```
+
+```{r include = FALSE}
+# Why, oh why do I need this chunk?
+DT::datatable(df)
+```
+
+```{r, results="asis"}
+for (icourse in all_courses) {
+  d = df %>% 
+    filter(course_title %in% icourse)
+  
+  quiz_df = d %>% 
+    group_by(quiz_id) %>% 
+    summarize(points = sum(points_given_updated),
+              avail = sum(points_available_updated),
+              grade = round(points/avail*100, 1)) %>% 
+    select(quiz_id, grade, points, avail)
+  quiz_df = quiz_df %>% 
+    mutate(quiz_id = sub("quiz_\\d*_", "", quiz_id))
+  
+  total = d %>% 
+    summarize(points = sum(points_given_updated),
+              avail = sum(points_available_updated),
+              grade = round(points/avail*100, 1)) %>% 
+    select(grade, points, avail)
+  
+  cat("\n")
+  hdr = paste0("## ", icourse, "\n")
+  cat(hdr)
+  txt = paste0(unique(d$txt), "\n")
+  cat(txt)  
+  msg = paste0("\nYour overall grade was ", round(total$grade, 1), 
+               "%, scoring ", total$points, " out of ", total$avail,
+               ".\n  ")
+  cat(msg)
+  if (grepl("pdf|latex", type_of_output)) {
+    print(knitr::kable(quiz_df))
+  }    
+  if (grepl("html", type_of_output)) {
+    dtable = DT::datatable(quiz_df)
+    print(htmltools::tagList(dtable))
+    cat_br(1)
+  }
+  d = d %>% 
+    filter(points_given_updated == 0) %>% 
+    select(question, correct_answer, given_answer)
+  if (nrow(d) > 0) {
+    msg = paste0("\n**Below are any incorrect answers:**\n\n")
+    cat(msg)  
+    
+    if (grepl("pdf|latex", type_of_output)) {
+      dtable = knitr::kable(d) %>% 
+        column_spec(2:3, width = "12em") %>% 
+        column_spec(1, width = "20em") 
+    }    
+    if (grepl("html", type_of_output)) {
+      dtable = DT::datatable(d)
+      dtable = htmltools::tagList(dtable)
+    }    
+    print(dtable)
+  }
+  cat("\n\n")
+}
+```
+
+
+# DataCamp Modules
+
+```{r,echo=FALSE,warning=FALSE,error=FALSE,message=FALSE}
+course_files <- list.files("datacamp", 
+                           full.names = TRUE, 
+                           recursive = TRUE, include.dirs = FALSE, 
+                           pattern = ".*_by_course.*.csv")
+read_csv_stop <- function(fname){
+  x = read_csv(fname)
+  stop_for_problems(x)
+  if (nrow(x) == 0) {
+    return(NULL)
+  }  
+  x = x %>%  
+    clean_names()
+  x = x %>% 
+    rename(datacamp_username = username)
+  return(x)
+}
+dc = purrr::map_dfr(course_files, read_csv_stop)
+dc = dc %>% 
+  distinct()
+dc = dc %>% 
+  left_join(student_df, by = "datacamp_username")
+dc = dc %>% 
+  filter(name %in% params$name)
+tab = dc %>% 
+  select(course_name, course_completion_rate, 
+         completed_course_exercises, started_course, finished_course, 
+         last_visted_course)
+tab = tab %>% 
+  mutate(course_completion_rate = round(course_completion_rate * 100, 1))
+```
+
+```{r, echo=FALSE,results = "asis"}
+if (grepl("pdf|latex", type_of_output)) {
+  print(knitr::kable(tab))
+}    
+if (grepl("html", type_of_output)) {
+  dtable = DT::datatable(tab)
+  print(htmltools::tagList(dtable))
+}
+```
