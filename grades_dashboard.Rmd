@@ -36,10 +36,8 @@ course_df = data_frame(
 ```
 
 ```{r, include = FALSE}
-student_df = data_frame(
-  name = c("Antonio",  "Tiana"),
-  user = c("qYJ_bWY0MaBGogHBrCDA7A", "1_pTsoiB7xbTG-g73Dbwmg")
-)
+student_df = readr::read_rds("student_df.rds")
+
 course_name_from_csv = function(x) {
   sub(".*jhu- *(.*?) *-quiz.*", "\\1", basename(x))
 }
