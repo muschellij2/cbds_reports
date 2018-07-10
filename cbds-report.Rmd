@@ -133,7 +133,8 @@ df = df %>%
 courses = df %>% 
   group_by(course_name) %>% 
   summarize(max_attempt = max(course_attempt, na.rm = TRUE),
-            max_attempt_allowed = max(course_attempts_allowed)) 
+            max_attempt_allowed = max(course_attempts_allowed),
+            max_quiz_attempt =  max(quiz_attempt, na.rm = TRUE)) 
 
 df = df %>%
   left_join(student_df)
@@ -182,9 +183,22 @@ DT::datatable(df)
 for (icourse in all_courses) {
   d = df %>% 
     filter(course_title %in% icourse)
-  
+
   quiz_df = d %>% 
-    group_by(quiz_id) %>% 
+    group_by(quiz_id) %>%
+    ## use most recent quiz attempt where applicable
+    mutate(quiz_use = ifelse(max_quiz_attempt %in% quiz_attempt, 
+                             max_quiz_attempt, 
+                             quiz_attempt)) %>%
+    ## remove quizzes that haven't actually been taken
+    group_by(quiz_hash) %>%
+    mutate(old_hash = ifelse(all(given_answer == "No answer chosen"), TRUE, FALSE)) %>%
+    filter(!old_hash) %>%
+    ungroup(quiz_hash) %>%
+    group_by(quiz_id) %>%
+    ## only include most recent course and quiz attempts in summary
+    filter(course_attempt == max_attempt, 
+           quiz_attempt == quiz_use) %>%
     summarize(points = sum(points_given_updated),
               avail = sum(points_available_updated),
               grade = round(points/avail*100, 1)) %>% 
@@ -192,9 +206,9 @@ for (icourse in all_courses) {
   quiz_df = quiz_df %>% 
     mutate(quiz_id = sub("quiz_\\d*_", "", quiz_id))
   
-  total = d %>% 
-    summarize(points = sum(points_given_updated),
-              avail = sum(points_available_updated),
+  total = quiz_df %>% 
+    summarize(points = sum(points),
+              avail = sum(avail),
               grade = round(points/avail*100, 1)) %>% 
     select(grade, points, avail)
   
