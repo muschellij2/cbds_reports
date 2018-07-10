@@ -192,7 +192,7 @@ for (icourse in all_courses) {
                              quiz_attempt)) %>%
     ## remove quizzes that haven't actually been taken
     group_by(quiz_hash) %>%
-    mutate(old_hash = ifelse(all(given_answer == "No answer chosen"), TRUE, FALSE)) %>%
+    mutate(old_hash = all(given_answer == "No answer chosen")) %>%
     filter(!old_hash) %>%
     ungroup(quiz_hash) %>%
     group_by(quiz_id) %>%
