@@ -91,8 +91,8 @@ course_df = data_frame(
                    "Data Tidying",
                    "Data Visualization",
                    "Getting Data",
-                   "Basics of Data Analysis",
-                   "Written and Oral Communication in DS",
+                   "Data Analysis",
+                   "Written and Oral Communication in Data Science",
                    "Getting a Job in Data Science"
                    ),
   course_name = c("chromebook-data-science",
@@ -104,8 +104,8 @@ course_df = data_frame(
                   "data-tidying",
                   "data-visualization",
                   "getting-data",
-                  "basics-of-data-analysis",
-                  "written-and-oral-communication-in-ds",
+                  "dataanalysis",
+                  "written-and-oral-communication-in-data-science",
                   "getting-a-job-in-data-science"
                   ))
 course_df = course_df %>% 

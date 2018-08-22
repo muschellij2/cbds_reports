@@ -9,3 +9,4 @@ cbds-report-*.md
 cbds-report-*.pdf
 student_df.rds
 .Rapp.history
+.httr-oauth
