@@ -23,6 +23,9 @@ library(janitor)
 library(here)
 library(shiny)
 library(kableExtra)
+library(httr)
+library(rlist)
+library(jsonlite)
 getOutputFormat <- function() {
   output <- rmarkdown:::parse_yaml_front_matter(
     readLines(knitr::current_input())
@@ -95,18 +98,18 @@ course_df = data_frame(
                    "Written and Oral Communication in Data Science",
                    "Getting a Job in Data Science"
                    ),
-  course_name = c("chromebook-data-science",
-                  "howtouseachromebook",
-                  "googleandthecloud",
-                  "organizingdatascienceprojects",
-                  "version-control",
-                  "introduction-to-r",
-                  "data-tidying",
-                  "data-visualization",
-                  "getting-data",
-                  "dataanalysis",
-                  "written-and-oral-communication-in-data-science",
-                  "getting-a-job-in-data-science"
+  course_name = c("cbds-intro",
+                  "cbds-chromebook",
+                  "cbds-google",
+                  "cbds-organizing",
+                  "cbds-version-control",
+                  "cbds-intro-r",
+                  "cbds-tidying",
+                  "cbds-visualization",
+                  "cbds-getting-data",
+                  "cbds-analysis",
+                  "cbds-communication",
+                  "cbds-getting-jobs"
                   ))
 course_df = course_df %>% 
   distinct 
@@ -146,6 +149,48 @@ df = df %>%
 # Report Overview
 
 This is a Chromebook Data Science Plus report for __`r params$name`__ to help guide tutorial sessions. This report is designed as an aide, but is not an official report on the grades of any person. The official tally for grades is available through a user's Leanpub account.
+
+
+# Slack Standup Report
+
+```{r,echo=FALSE,warning=FALSE,error=FALSE,message=FALSE}
+SLACK <- Sys.getenv("SLACK_API_TOKEN")
+url <- paste("https://slack.com/api/groups.history?token=",
+             SLACK,"&channel=GCD4LHBUL&pretty=1",sep = "")
+l <- GET(url)
+res <- content(l, as="text")
+new <- jsonlite::fromJSON(res)
+slack <- subset(new$messages, new$messages$username == df$fullname)
+list <- list.rbind(slack$attachments)$fields
+for (i in 1:length(list)){
+    list[[i]]$ts <- as.POSIXct(as.numeric(gsub("\\..*","",slack$ts[i])), 
+                               origin="1970-01-01")
+}
+responses <- list.rbind(list) %>%
+  mutate(ts = format(ts,format='%m/%d/%Y')) %>% 
+  select(ts, title, value, -short) %>% 
+  mutate(value = replace(value, title=="The same as yesterday", "The same as yesterday"),
+         title = replace(title, title=="The same as yesterday", "What are you working on today?")) %>% 
+  dcast(ts ~ title, value.var = "value") %>% 
+  select(1,5,4) %>% 
+  rename(Date = ts)
+bbb = nrow(filter(responses, is.na(`What are you working on today?`)))
+```
+
+#### You have missed reporting your daily activity on Slack in <span style="color:red">`r bbb` day(s).</span>
+
+
+```{r, echo=FALSE,results = "asis"}
+if (grepl("pdf|latex", type_of_output)) {
+  print(knitr::kable(responses))
+}    
+if (grepl("html", type_of_output)) {
+  dtable = DT::datatable(responses)
+  print(htmltools::tagList(dtable))
+}
+```
+
+
 
 # Leanpub Courses
 
@@ -295,3 +340,4 @@ if (grepl("html", type_of_output)) {
   print(htmltools::tagList(dtable))
 }
 ```
+
