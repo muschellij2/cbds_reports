@@ -22,15 +22,15 @@ for (m in 1:nrow(student_df)) {
   rmarkdown::render(outfile)
   
   # post as a private slack message to student
-  # slackr_upload(
-  #   filename = paste0("./cbds-report-", student_df$name[m], ".html"),
-  #   channels = student_df$slack_id[m],
-  #   api_token = Sys.getenv("SLACK_API_TOKEN"))
+  slackr_upload(
+    filename = paste0("./cbds-report-", student_df$name[m], ".html"),
+    channels = student_df$slack_id[m],
+    api_token = Sys.getenv("SLACK_API_TOKEN"))
   
   # post to dailycheckings private channel
   slackr_upload(
     filename = paste0("./cbds-report-", student_df$name[m], ".html"),
-    channels = "test",
+    channels = "dailycheckins",
     api_token = Sys.getenv("SLACK_API_TOKEN"))
 }
 
